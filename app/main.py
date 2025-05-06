@@ -2,8 +2,10 @@ from fastapi import FastAPI, Request
 from .middleware.rate_limiter import RateLimiterMiddleware
 from starlette.responses import Response
 import httpx
+from app.routes import admin
 
 app = FastAPI()
+app.include_router(admin.router, prefix='/admin')
 app.add_middleware(RateLimiterMiddleware)
 
 BACKEND_URL = 'http://localhost:9000'
