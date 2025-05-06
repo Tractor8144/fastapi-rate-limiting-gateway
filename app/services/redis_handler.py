@@ -35,3 +35,7 @@ def get_token_bucket(key: str, limit: int, refill_rate: float):
     except redis.RedisError as e:
         print(f"redis client error: {e}")
         return StatusType.REDIS_ERROR
+
+
+def get_rule_key(identifier: str) -> str:
+    return f'rate_limiy_rule:{identifier}'
