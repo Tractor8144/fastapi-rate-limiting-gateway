@@ -20,7 +20,7 @@ def get_token_bucket(key: str, limit: int, refill_rate: float):
             tokens = float(limit)
             last_refill = now
 
-        if round(tokens, 6) >= 1e-6:
+        if round(tokens, 6) >= 1:
             redis_client.hset(key, mapping={
                 "tokens": tokens - 1,
                 "last_refill": now
