@@ -6,7 +6,7 @@ import redis
 
 
 class TokenBucketAlgorithm(RateLimitingAlgorithm):
-    def get_request_status(self, key: str, rate_limit: int, refill_rate: int) -> StatusType:
+    def check_request_allowed(self, key: str, rate_limit: int, refill_rate: int) -> StatusType:
         try:
             now = time.time()
             bucket = redis_client.hgetall(key)
