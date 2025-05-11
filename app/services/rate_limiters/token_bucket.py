@@ -6,7 +6,7 @@ import redis
 
 
 class TokenBucketAlgorithm(RateLimitingAlgorithm):
-    def get_request_status(self, key: str, rate_limt: int, refill_rate: int) -> StatusType:
+    def get_request_status(self, key: str, rate_limit: int, refill_rate: int) -> StatusType:
         try:
             now = time.time()
             bucket = redis_client.hgetall(key)
@@ -16,9 +16,9 @@ class TokenBucketAlgorithm(RateLimitingAlgorithm):
                 last_refill = float(bucket["last_refill"])
                 elapsed = now - last_refill
                 refill = elapsed * refill_rate
-                tokens = min(rate_limt, round(tokens + refill, 6))
+                tokens = min(rate_limit, round(tokens + refill, 6))
             else:
-                tokens = float(rate_limt)
+                tokens = float(rate_limit)
                 last_refill = now
 
             if round(tokens, 6) >= 1:
@@ -26,7 +26,7 @@ class TokenBucketAlgorithm(RateLimitingAlgorithm):
                     "tokens": tokens - 1,
                     "last_refill": now
                 })
-                redis_client.expire(key, int(rate_limt / refill_rate))
+                redis_client.expire(key, int(rate_limit / refill_rate))
                 print(f"[DEBUG] Allowed. Tokens left: {tokens - 1:.2f}")
                 return StatusType.ALLOWED
             else:
