@@ -91,3 +91,21 @@ def delete_rule(identifier: str):
     redis_client.delete(key)
 
     return {'msg': 'Rate limit rule deleted', 'identifier': identifier}
+
+
+@router.post('/rule/default', status_code=status.HTTP_201_CREATED)
+def add_default_rule(rate_limit_rule: RateLimitModel):
+    key = get_rule_key('default')
+
+    if redis_client.exists(key):
+        raise HTTPException(
+            status_code=409, detail='Default rate limit rule already exists'
+        )
+
+    redis_client.hset(key=key, mapping={
+        'identifier_type': IdentifierType.IDENTIFIER_ROUTE.value,
+        'rate_limit': rate_limit_rule.rate_limit,
+        'refill_rate': rate_limit_rule.refill_rate
+    })
+
+    return {'msg': 'Default rate limit rule created'}
