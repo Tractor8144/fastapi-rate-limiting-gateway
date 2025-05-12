@@ -17,6 +17,11 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         logging.info(
             f"Incoming request: {request.method} {request.url} from {request.client.host}")
 
+        if request.url.path.startswith('/admin/'):
+            logging.info(
+                f"Skipping rate limiting for admin route: {request.url.path}")
+            return await call_next(request)
+
         identifiers = RequestParser.extract_identifiers(request)
         logging.info(f"Extracted identifiers: {identifiers}")
 
