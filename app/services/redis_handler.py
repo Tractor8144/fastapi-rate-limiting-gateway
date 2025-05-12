@@ -1,40 +1,20 @@
 import redis
 import time
 from app.services.status_enum import StatusType
+from app.services.rate_limiters.algo_types import RateLimitingAlgoType
 
 redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
 
 
-def get_token_bucket(key: str, limit: int, refill_rate: float):
+def check_request_allowed(key: str, limit: int, refill_rate: float, algorithm_name: str):
     try:
-        now = time.time()
-        bucket = redis_client.hgetall(key)
-
-        if bucket:
-            tokens = float(bucket["tokens"])
-            last_refill = float(bucket["last_refill"])
-            elapsed = now - last_refill
-            refill = elapsed * refill_rate
-            tokens = min(limit, round(tokens + refill, 6))
-        else:
-            tokens = float(limit)
-            last_refill = now
-
-        if round(tokens, 6) >= 1:
-            redis_client.hset(key, mapping={
-                "tokens": tokens - 1,
-                "last_refill": now
-            })
-            redis_client.expire(key, int(limit / refill_rate))
-            print(f"[DEBUG] Allowed. Tokens left: {tokens - 1:.2f}")
-            return StatusType.ALLOWED
-        else:
-            print(f"[DEBUG] BLOCKED. Tokens left: {tokens:.2f}")
-            return StatusType.REFUSED
-
-    except redis.RedisError as e:
-        print(f"redis client error: {e}")
-        return StatusType.REDIS_ERROR
+        algo_type = RateLimitingAlgoType.from_value(algorithm_name)
+    except:
+        raise ValueError({'detail': 'Invalid rate limiting algorithm'})
+    if algo_type == RateLimitingAlgoType.ALGO_TOKEN_BUCKET:
+        from app.services.rate_limiters.token_bucket import TokenBucketAlgorithm
+        return TokenBucketAlgorithm.check_request_allowed(
+            key, limit, refill_rate)
 
 
 def get_rule_key(identifier: str) -> str:

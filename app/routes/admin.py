@@ -3,6 +3,7 @@ from enum import Enum
 from fastapi import APIRouter, status, Body
 from app.services.redis_handler import redis_client, get_rule_key
 from fastapi import HTTPException
+from app.services.rate_limiters.algo_types import RateLimitingAlgoType
 
 
 class IdentifierType(Enum):
@@ -17,10 +18,11 @@ router = APIRouter()
 
 
 class RateLimitModel(BaseModel):
-    identifier_type: IdentifierType
+    identifier_type: int
     identifier_value: str
     rate_limit: int
     refill_rate: int
+    algorithm: str
 
 
 @router.get('/rule/{identifier}', response_model=RateLimitModel)
@@ -34,10 +36,11 @@ def get_rule(identifier: str):
 
     try:
         return RateLimitModel(
-            identifier_type=IdentifierType(int(data['identifier_type'])),
+            identifier_type=(int(data['identifier_type'])),
             identifier_value=identifier,
             rate_limit=int(data['rate_limit']),
-            refill_rate=int(data['refill_rate'])
+            refill_rate=int(data['refill_rate']),
+            algorithm=data['algorithm']
         )
     except (KeyError, ValueError) as e:
         raise HTTPException(status_code=500, detail='Invalid data in Redis')
@@ -52,9 +55,10 @@ def add_rule(rate_limit_rule: RateLimitModel):
             status_code=409, detail='Rate limit rule already exists')
 
     redis_client.hset(key, mapping={
-        'identifier_type': rate_limit_rule.identifier_type.value,
+        'identifier_type': rate_limit_rule.identifier_type,
         'rate_limit': rate_limit_rule.rate_limit,
-        'refill_rate': rate_limit_rule.refill_rate
+        'refill_rate': rate_limit_rule.refill_rate,
+        'algorithm': rate_limit_rule.algorithm
     })
 
     return {'msg': 'Rate limit rule created', 'identifier': rate_limit_rule.identifier_value}
@@ -72,9 +76,10 @@ def modify_rule(identifier: str, rate_limit_rule: RateLimitModel = Body(...)):
             status_code=404, detail='Rate limit rule not found')
 
     redis_client.hset(key, mapping={
-        'identifier_type': rate_limit_rule.identifier_type.value,
+        'identifier_type': rate_limit_rule.identifier_type,
         'rate_limit': rate_limit_rule.rate_limit,
-        'refill_rate': rate_limit_rule.refill_rate
+        'refill_rate': rate_limit_rule.refill_rate,
+        'algorithm': rate_limit_rule.algorithm
     })
 
     return {'msg': 'Rate limit rule updated', 'identifier': identifier}
@@ -103,9 +108,10 @@ def add_default_rule(rate_limit_rule: RateLimitModel):
         )
 
     redis_client.hset(key=key, mapping={
-        'identifier_type': IdentifierType.IDENTIFIER_ROUTE.value,
+        'identifier_type': IdentifierType.IDENTIFIER_ROUTE,
         'rate_limit': rate_limit_rule.rate_limit,
-        'refill_rate': rate_limit_rule.refill_rate
+        'refill_rate': rate_limit_rule.refill_rate,
+        'algorithm': rate_limit_rule.algorithm
     })
 
     return {'msg': 'Default rate limit rule created'}

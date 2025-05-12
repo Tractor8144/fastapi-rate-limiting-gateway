@@ -1,7 +1,7 @@
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-from app.services.redis_handler import get_token_bucket, get_rule_key
+from app.services.redis_handler import check_request_allowed, get_rule_key
 from app.services.status_enum import StatusType
 from app.services.request_parser import RequestParser
 from app.routes.admin import IdentifierType
@@ -32,13 +32,15 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         logging.info("Checking rate limit for extracted identifiers...")
 
         for identifier_type, identifier_name in identifiers.items():
-            limit, refill_rate = self.get_rate_limit_rule(identifier_name)
+            limit, refill_rate, algorithm_name = self.get_rate_limit_rule(
+                identifier_name)
             logging.info(
                 f"Rate limit for {identifier_name}: {limit} requests/min, refill rate: {refill_rate}")
 
             if limit > 0:
                 rule_applied = True
-                status = get_token_bucket(identifier_name, limit, refill_rate)
+                status = check_request_allowed(
+                    identifier_name, limit, refill_rate, algorithm_name)
 
                 if status == StatusType.REFUSED:
                     logging.warning(
@@ -61,15 +63,16 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         if not rule_applied:
             logging.info(
                 "No specific rate limit rule applied, using default rate limit")
-            default_limit, default_refill_rate = self.get_rate_limit_rule(
+            default_limit, default_refill_rate, default_algo_name = self.get_rate_limit_rule(
                 'default')
             if default_limit == 0:
                 logging.info(
                     "Default rate limit not found in Redis, using hardcoded values")
                 default_limit = 5
                 default_refill_rate = 1
-            status = get_token_bucket(
-                'default', default_limit, default_refill_rate)
+                default_algo_name = 'token_bucket'
+            status = check_request_allowed(
+                'default', default_limit, default_refill_rate, default_algo_name)
 
             if status == StatusType.REFUSED:
                 logging.warning("Default rate limit exceeded")
@@ -92,14 +95,15 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
 
         if not data:
             logging.info(f"No rate limit rule found for {identifier_name}")
-            return (0, 0)
+            return (0, 0.0, '')
         try:
             rate_limit = int(data['rate_limit'])
-            refill_rate = int(data['refill_rate'])
+            refill_rate = float(data['refill_rate'])
+            algorithm_name = data['algorithm']
             logging.info(
-                f"Rate limit rule found for {identifier_name}: {rate_limit} requests/sec, refill rate: {refill_rate}")
-            return (rate_limit, refill_rate)
+                f"Rate limit rule found for {identifier_name}: {rate_limit} requests/sec, refill rate: {refill_rate}, algorithm name: {algorithm_name}")
+            return (rate_limit, refill_rate, algorithm_name)
         except (KeyError, ValueError) as e:
             logging.error(
                 f"Error parsing rate limit rule for {identifier_name}: {e}")
-            return (0, 0)
+            return (0, 0.0, '')
